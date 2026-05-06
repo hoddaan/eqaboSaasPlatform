@@ -1,0 +1,21 @@
+# Node
+node_modules/
+
+# Environment — NEVER commit real credentials
+.env
+.env.local
+!.env.example
+
+# Uploaded files
+uploads/
+
+# Logs
+*.log
+logs/
+
+# PM2
+.pm2/
+
+# OS
+.DS_Store
+Thumbs.db
