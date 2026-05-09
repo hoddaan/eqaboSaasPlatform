@@ -32,6 +32,12 @@ export class DashboardService extends ApiService {
 // ── Hotels ─────────────────────────────────────────────
 @Injectable({ providedIn: 'root' })
 export class HotelService extends ApiService {
+  getProfile(id: string)           { return this.http.get<any>(`${BASE}/hotels/${id}`); }
+  updateProfile(id: string, d: any){ return this.http.put<any>(`${BASE}/hotels/${id}/profile`, d); }
+  uploadImage(id: string, field: string, file: File) {
+    const fd = new FormData(); fd.append('image', file);
+    return this.http.post<any>(`${BASE}/hotels/${id}/images/${field}`, fd);
+  }
   getAll(filters?: any)     { return this.http.get<any>(`${BASE}/hotels`, { params: this.buildParams(filters || {}) }); }
   getOne(id: string)        { return this.http.get<any>(`${BASE}/hotels/${id}`); }
   create(data: any)         { return this.http.post<any>(`${BASE}/hotels`, data); }
@@ -82,17 +88,7 @@ export class GuestService extends ApiService {
 
 
 // ── Finance ─────────────────────────────────────────────
-@Injectable({ providedIn: 'root' })
-export class FinanceService extends ApiService {
-  getReport(period?: string, from?: string, to?: string) {
-    return this.http.get<any>(`${BASE}/finance/report`, { params: this.buildParams({ period, from, to }) });
-  }
-  getTransactions(filters?: any) { return this.http.get<any>(`${BASE}/transactions`, { params: this.buildParams(filters || {}) }); }
-  createTransaction(d: any)      { return this.http.post<any>(`${BASE}/transactions`, d); }
-  getInvoices(filters?: any)     { return this.http.get<any>(`${BASE}/invoices`, { params: this.buildParams(filters || {}) }); }
-  createInvoice(d: any)          { return this.http.post<any>(`${BASE}/invoices`, d); }
-  updateInvoice(id: string, d: any){ return this.http.put<any>(`${BASE}/invoices/${id}`, d); }
-}
+
 
 // ── Users/Staff ─────────────────────────────────────────
 @Injectable({ providedIn: 'root' })
@@ -158,6 +154,7 @@ export class MenuService extends ApiService {
 export class OrderService extends ApiService {
   getDashboard()               { return this.http.get<any>(`${BASE}/orders/dashboard`); }
   getAll(f?: any)              { return this.http.get<any>(`${BASE}/orders`, { params: this.buildParams(f||{}) }); }
+  getHistory(f?: any)          { return this.http.get<any>(`${BASE}/orders`, { params: this.buildParams({...f||{}, history:true, limit:1000}) }); }
   getOne(id: string)           { return this.http.get<any>(`${BASE}/orders/${id}`); }
   create(d: any)               { return this.http.post<any>(`${BASE}/orders`, d); }
   updateStatus(id: string, d: any) { return this.http.patch<any>(`${BASE}/orders/${id}/status`, d); }
@@ -209,8 +206,66 @@ export class StaffService extends ApiService {
 
 @Injectable({ providedIn: 'root' })
 export class MaintenanceService extends ApiService {
-  getAll(f?: any)               { return this.http.get<any>(`${BASE}/maintenance`, { params: this.buildParams(f||{}) }); }
-  create(d: any)                { return this.http.post<any>(`${BASE}/maintenance`, d); }
-  update(id: string, d: any)    { return this.http.put<any>(`${BASE}/maintenance/${id}`, d); }
-  remove(id: string)            { return this.http.delete<any>(`${BASE}/maintenance/${id}`); }
+  getDashboard()                  { return this.http.get<any>(`${BASE}/maintenance/dashboard`); }
+  getAll(f?: any)                 { return this.http.get<any>(`${BASE}/maintenance`, { params: this.buildParams(f||{}) }); }
+  getOne(id: string)              { return this.http.get<any>(`${BASE}/maintenance/${id}`); }
+  create(d: any)                  { return this.http.post<any>(`${BASE}/maintenance`, d); }
+  update(id: string, d: any)      { return this.http.put<any>(`${BASE}/maintenance/${id}`, d); }
+  remove(id: string)              { return this.http.delete<any>(`${BASE}/maintenance/${id}`); }
+  uploadImages(id: string, files: File[], type: string) {
+    const fd = new FormData();
+    files.forEach(f => fd.append('images', f));
+    return this.http.post<any>(`${BASE}/maintenance/${id}/images?type=${type}`, fd);
+  }
+  deleteImage(id: string, url: string, type: string) {
+    return this.http.delete<any>(`${BASE}/maintenance/${id}/images`, { body: { url, type } });
+  }
+}
+
+@Injectable({ providedIn: 'root' })
+export class FinanceService extends ApiService {
+  getDashboard()                   { return this.http.get<any>(`${BASE}/finance/dashboard`); }
+  getReport(f?: any)               { return this.http.get<any>(`${BASE}/finance/report`, { params: this.buildParams(f||{}) }); }
+  // Invoices
+  getInvoices(f?: any)             { return this.http.get<any>(`${BASE}/invoices`, { params: this.buildParams(f||{}) }); }
+  createInvoice(d: any)            { return this.http.post<any>(`${BASE}/invoices`, d); }
+  updateInvoice(id: string, d: any){ return this.http.put<any>(`${BASE}/invoices/${id}`, d); }
+  deleteInvoice(id: string)        { return this.http.delete<any>(`${BASE}/invoices/${id}`); }
+  // Transactions
+  getTransactions(f?: any)         { return this.http.get<any>(`${BASE}/transactions`, { params: this.buildParams(f||{}) }); }
+  createTransaction(d: any)        { return this.http.post<any>(`${BASE}/transactions`, d); }
+  // Assets
+  getAssets()                      { return this.http.get<any>(`${BASE}/finance/assets`); }
+  createAsset(d: any)              { return this.http.post<any>(`${BASE}/finance/assets`, d); }
+  updateAsset(id: string, d: any)  { return this.http.put<any>(`${BASE}/finance/assets/${id}`, d); }
+  deleteAsset(id: string)          { return this.http.delete<any>(`${BASE}/finance/assets/${id}`); }
+  // Liabilities
+  getLiabilities()                        { return this.http.get<any>(`${BASE}/finance/liabilities`); }
+  createLiability(d: any)                 { return this.http.post<any>(`${BASE}/finance/liabilities`, d); }
+  updateLiability(id: string, d: any)     { return this.http.put<any>(`${BASE}/finance/liabilities/${id}`, d); }
+  deleteLiability(id: string)             { return this.http.delete<any>(`${BASE}/finance/liabilities/${id}`); }
+  // Expenses
+  getExpenses(f?: any)                    { return this.http.get<any>(`${BASE}/finance/expenses`, { params: this.buildParams(f||{}) }); }
+  createExpense(d: any)                   { return this.http.post<any>(`${BASE}/finance/expenses`, d); }
+  updateExpense(id: string, d: any)       { return this.http.put<any>(`${BASE}/finance/expenses/${id}`, d); }
+  deleteExpense(id: string)               { return this.http.delete<any>(`${BASE}/finance/expenses/${id}`); }
+}
+
+@Injectable({ providedIn: 'root' })
+export class HallService extends ApiService {
+  getDashboard()                        { return this.http.get<any>(`${BASE}/halls/dashboard`); }
+  getHalls()                            { return this.http.get<any>(`${BASE}/halls`); }
+  createHall(d: any)                    { return this.http.post<any>(`${BASE}/halls`, d); }
+  updateHall(id: string, d: any)        { return this.http.put<any>(`${BASE}/halls/${id}`, d); }
+  deleteHall(id: string)                { return this.http.delete<any>(`${BASE}/halls/${id}`); }
+  getBookings(f?: any)                  { return this.http.get<any>(`${BASE}/halls/bookings`, { params: this.buildParams(f||{}) }); }
+  getBooking(id: string)                { return this.http.get<any>(`${BASE}/halls/bookings/${id}`); }
+  createBooking(d: any)                 { return this.http.post<any>(`${BASE}/halls/bookings`, d); }
+  updateBooking(id: string, d: any)     { return this.http.put<any>(`${BASE}/halls/bookings/${id}`, d); }
+  cancelBooking(id: string, d?: any)    { return this.http.delete<any>(`${BASE}/halls/bookings/${id}`, { body: d }); }
+  uploadHallImages(id: string, files: File[]) {
+    const fd = new FormData();
+    files.forEach(f => fd.append('images', f));
+    return this.http.post<any>(`${BASE}/halls/${id}/images`, fd);
+  }
 }

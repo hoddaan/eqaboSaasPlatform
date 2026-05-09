@@ -100,3 +100,42 @@ exports.getPlatformStats = async (req, res) => {
     },
   });
 };
+
+// ── UPLOAD HOTEL IMAGES ───────────────────────────────
+exports.uploadImage = async (req, res) => {
+  if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+
+  const field = req.params.field; // logo, cover, signature
+  const allowedFields = ['logoUrl','coverImageUrl','signatureUrl'];
+  const fieldMap = { logo: 'logoUrl', cover: 'coverImageUrl', signature: 'signatureUrl', stamp: 'stampUrl' };
+  const dbField = fieldMap[field];
+
+  if (!dbField) return res.status(400).json({ success: false, message: 'Invalid image type' });
+
+  const url = `/uploads/hotel/${req.file.filename}`;
+
+  const hotel = await Hotel.findByIdAndUpdate(
+    req.params.id,
+    { [dbField]: url },
+    { new: true }
+  );
+
+  if (!hotel) return res.status(404).json({ success: false, message: 'Hotel not found' });
+  res.json({ success: true, message: 'Image uploaded', data: { url, hotel } });
+};
+
+// ── UPDATE HOTEL PROFILE ──────────────────────────────
+exports.updateProfile = async (req, res) => {
+  const { name, contactEmail, contactPhone, address, taxRate, currency, timezone,
+          website, description, receiptFooter, socialMedia, propertyType, floors, services } = req.body;
+
+  const hotel = await Hotel.findByIdAndUpdate(
+    req.params.id,
+    { name, contactEmail, contactPhone, address, taxRate, currency, timezone,
+      website, description, receiptFooter, socialMedia, propertyType, floors, services },
+    { new: true }
+  ).populate('countryId', 'name').populate('cityId', 'name');
+
+  if (!hotel) return res.status(404).json({ success: false, message: 'Hotel not found' });
+  res.json({ success: true, message: 'Profile updated', data: { hotel } });
+};

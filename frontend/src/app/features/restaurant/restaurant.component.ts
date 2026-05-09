@@ -1,9 +1,9 @@
 import { Component, OnInit, signal, computed } from '@angular/core';
 import { CommonModule, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MenuService, OrderService, GuestService } from '../../core/services/api.service';
+import { MenuService, OrderService, GuestService, HotelService } from '../../core/services/api.service';
 
-type RTab = 'pos'|'tables'|'orders'|'menu'|'store';
+type RTab = 'pos'|'tables'|'orders'|'menu'|'store'|'history';
 const DEFAULT_CATS = ['breakfast','lunch','dinner','salads','snacks','coffee','drinks','desserts','specials'];
 const CAT_ICONS: Record<string,string> = {
   breakfast:'🌅',lunch:'☀️',dinner:'🌙',salads:'🥗',snacks:'🍟',
@@ -61,6 +61,7 @@ const TABLE_LOCS = ['indoor','outdoor','bar','terrace','private'];
     <button class="btn btn-sm" [ngClass]="tab()==='orders'?'btn-g':'btn-ghost'" (click)="tab.set('orders')">📦 Orders ({{ activeOrders().length }})</button>
     <button class="btn btn-sm" [ngClass]="tab()==='menu'?'btn-g':'btn-ghost'" (click)="tab.set('menu')">📋 Menu</button>
     <button class="btn btn-sm" [ngClass]="tab()==='store'?'btn-g':'btn-ghost'" (click)="tab.set('store')">🏪 Store</button>
+    <button class="btn btn-sm" [ngClass]="tab()==='history'?'btn-g':'btn-ghost'" (click)="tab.set('history');loadHistory()">📜 History</button>
   </div>
 
   <!-- ══════════ POS TAB ══════════ -->
@@ -852,6 +853,165 @@ const TABLE_LOCS = ['indoor','outdoor','bar','terrace','private'];
     </div>
   </div>
 
+
+  <!-- ══════════ HISTORY TAB ══════════ -->
+  <div *ngIf="tab()=='history'">
+
+    <!-- Stats bar -->
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px">
+      <div class="mc">
+        <div class="mc-ico">📦</div><div class="mc-lbl">Total Orders</div>
+        <div class="mc-val">{{ historyStats().total }}</div>
+      </div>
+      <div class="mc">
+        <div class="mc-ico">✅</div><div class="mc-lbl">Paid</div>
+        <div class="mc-val" style="color:var(--success)">{{ historyStats().paid }}</div>
+      </div>
+      <div class="mc">
+        <div class="mc-ico">⏳</div><div class="mc-lbl">Pending</div>
+        <div class="mc-val" style="color:var(--warn)">{{ historyStats().pending }}</div>
+      </div>
+      <div class="mc">
+        <div class="mc-ico">❌</div><div class="mc-lbl">Cancelled</div>
+        <div class="mc-val" style="color:var(--danger)">{{ historyStats().cancelled }}</div>
+      </div>
+      <div class="mc">
+        <div class="mc-ico">💰</div><div class="mc-lbl">Revenue</div>
+        <div class="mc-val" style="color:var(--purple)">\${{ historyStats().revenue | number:'1.0-0' }}</div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div style="background:var(--surface);border-radius:12px;padding:14px;margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;border:1px solid var(--border)">
+      <div class="fg" style="min-width:180px">
+        <label style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px">Search</label>
+        <input [(ngModel)]="historySearch" (input)="applyHistoryFilter()" placeholder="Order #, guest, room, table..." style="margin-top:3px">
+      </div>
+      <div class="fg" style="min-width:130px">
+        <label style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px">Status</label>
+        <select [(ngModel)]="historyStatus" (change)="loadHistory()" style="margin-top:3px">
+          <option value="">All Status</option>
+          <option value="paid">✅ Paid</option>
+          <option value="pending">⏳ Pending</option>
+          <option value="preparing">👨‍🍳 Preparing</option>
+          <option value="served">🍽 Served</option>
+          <option value="cancelled">❌ Cancelled</option>
+        </select>
+      </div>
+      <div class="fg" style="min-width:130px">
+        <label style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px">Type</label>
+        <select [(ngModel)]="historyType" (change)="loadHistory()" style="margin-top:3px">
+          <option value="">All Types</option>
+          <option value="dine_in">🪑 Dine In</option>
+          <option value="room_service">🛏 Room Service</option>
+          <option value="takeaway">🥡 Takeaway</option>
+        </select>
+      </div>
+      <div class="fg" style="min-width:130px">
+        <label style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px">From Date</label>
+        <input type="date" [(ngModel)]="historyFrom" (change)="loadHistory()" style="margin-top:3px">
+      </div>
+      <div class="fg" style="min-width:130px">
+        <label style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px">To Date</label>
+        <input type="date" [(ngModel)]="historyTo" (change)="loadHistory()" style="margin-top:3px">
+      </div>
+      <div style="display:flex;gap:6px;align-items:flex-end">
+        <button class="btn btn-o btn-sm" (click)="setHistoryPreset('today')">Today</button>
+        <button class="btn btn-o btn-sm" (click)="setHistoryPreset('week')">7 Days</button>
+        <button class="btn btn-o btn-sm" (click)="setHistoryPreset('month')">30 Days</button>
+        <button class="btn btn-o btn-sm" (click)="clearHistoryFilters()">Clear</button>
+      </div>
+    </div>
+
+    <div *ngIf="historyLoading()" style="text-align:center;padding:30px;color:var(--muted)">
+      <div style="font-size:24px;margin-bottom:8px">⏳</div>Loading order history...
+    </div>
+
+    <div *ngIf="!historyLoading()" class="card">
+      <table class="tbl-hover">
+        <thead>
+          <tr>
+            <th>Order #</th>
+            <th>Date & Time</th>
+            <th>Type</th>
+            <th>Table / Room / Guest</th>
+            <th>Items</th>
+            <th>Subtotal</th>
+            <th>Tax</th>
+            <th>Discount</th>
+            <th>Total</th>
+            <th>Payment</th>
+            <th>Status</th>
+            <th>Staff</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let o of filteredHistoryOrders()">
+            <td style="font-family:monospace;font-size:11px;color:var(--purple);font-weight:700">{{ o.orderNumber }}</td>
+            <td style="font-size:11.5px;white-space:nowrap">
+              <div style="font-weight:600">{{ o.createdAt | date:'MMM d, y' }}</div>
+              <div style="color:var(--muted)">{{ o.createdAt | date:'HH:mm' }}</div>
+            </td>
+            <td>
+              <span style="font-size:11.5px">{{ orderTypeIcon(o.type) }}</span>
+              <div style="font-size:10.5px;color:var(--muted)">{{ o.type | titlecase }}</div>
+            </td>
+            <td style="font-size:12px">
+              <div *ngIf="o.tableNumber" style="font-weight:600">🪑 Table {{ o.tableNumber }}</div>
+              <div *ngIf="o.roomNumber" style="font-weight:600;color:var(--purple)">🛏 Room {{ o.roomNumber }}</div>
+              <div *ngIf="o.guestName" style="color:var(--muted)">{{ o.guestName }}</div>
+              <div *ngIf="!o.tableNumber&&!o.roomNumber&&!o.guestName" style="color:var(--muted)">—</div>
+            </td>
+            <td>
+              <div style="font-size:11.5px;max-width:160px">
+                <div *ngFor="let item of o.items" style="color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                  × {{ item.qty }} {{ item.name }}
+                </div>
+              </div>
+            </td>
+            <td style="font-size:12px">\${{ o.subtotal | number:'1.2-2' }}</td>
+            <td style="font-size:12px;color:var(--muted)">\${{ o.taxAmount | number:'1.2-2' }}</td>
+            <td style="font-size:12px;color:var(--warn)">
+              <span *ngIf="o.discountPct>0">{{ o.discountPct }}% (-\${{ o.discountAmt | number:'1.2-2' }})</span>
+              <span *ngIf="!o.discountPct" style="color:var(--muted)">—</span>
+            </td>
+            <td style="font-weight:800;color:var(--purple)">\${{ o.totalAmount | number:'1.2-2' }}</td>
+            <td>
+              <div *ngIf="o.paymentMethod" style="font-size:11.5px">
+                {{ payMethodIcon(o.paymentMethod) }} {{ o.paymentMethod | titlecase }}
+              </div>
+              <span *ngIf="!o.paymentMethod" style="color:var(--muted);font-size:11.5px">—</span>
+            </td>
+            <td>
+              <span class="badge" [ngClass]="historyStatusBadge(o.status)" style="font-size:9.5px">
+                {{ historyStatusIcon(o.status) }} {{ o.status | titlecase }}
+              </span>
+            </td>
+            <td style="font-size:11.5px;color:var(--muted)">{{ o.staffId?.name || '—' }}</td>
+            <td>
+              <div style="display:flex;gap:4px">
+                <button class="btn btn-o btn-xs" (click)="printReceipt(o)" title="Print receipt">🖨</button>
+                <button *ngIf="o.status==='paid'" class="btn btn-o btn-xs" (click)="openPayOrder(o)" title="View bill">💳</button>
+              </div>
+            </td>
+          </tr>
+          <tr *ngIf="!filteredHistoryOrders().length">
+            <td colspan="13" style="text-align:center;padding:40px;color:var(--muted)">
+              <div style="font-size:32px;margin-bottom:8px">📜</div>
+              No orders found for the selected filters.
+              <div style="margin-top:8px;font-size:12px">Try adjusting the date range or clearing filters.</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div *ngIf="filteredHistoryOrders().length" style="padding:10px 14px;font-size:12px;color:var(--muted);border-top:1px solid var(--border);display:flex;justify-content:space-between">
+        <span>Showing {{ filteredHistoryOrders().length }} of {{ historyOrders().length }} orders</span>
+        <span>Total revenue: <strong style="color:var(--purple)">\${{ historyStats().revenue | number:'1.2-2' }}</strong></span>
+      </div>
+    </div>
+  </div>
+
   <!-- ══ CONFIRM DIALOG ══ -->
   <div class="overlay" [class.show]="confirmDialog().show" style="z-index:9999">
     <div class="modal" style="width:420px;text-align:center">
@@ -1195,6 +1355,14 @@ export class RestaurantComponent implements OnInit {
   payMethod      = signal('cash');
 
   storeSubTab    = signal<'items'|'in'|'out'|'log'>('items');
+  historyOrders  = signal<any[]>([]);
+  historyLoading = signal(false);
+  historySearch  = '';
+  historyStatus  = '';
+  historyType    = '';
+  historyFrom    = '';
+  historyTo      = '';
+  historyStats   = signal<any>({ total:0, paid:0, cancelled:0, pending:0, revenue:0 });
   movements      = signal<any[]>([]);
   showStockIn    = signal(false);
   showStockOut   = signal(false);
@@ -1307,9 +1475,24 @@ export class RestaurantComponent implements OnInit {
   posCartHas(id: string): boolean { return this.cart().some(i => i.menuItemId === id); }
   cartQty(id: string): number     { return this.cart().find(i => i.menuItemId === id)?.qty || 0; }
 
-  constructor(private menuSvc: MenuService, private orderSvc: OrderService) {}
+  constructor(private menuSvc: MenuService, private orderSvc: OrderService, private hotelSvc: HotelService) {}
 
-  ngOnInit() { this.loadAll(); }
+  ngOnInit() { this.loadAll(); this.loadHotelProfile(); }
+
+  loadHotelProfile() {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const rawHotelId = user.hotelId;
+    const hotelId = typeof rawHotelId === 'object' ? rawHotelId?._id : rawHotelId;
+    if (!hotelId) return;
+    this.hotelSvc.getProfile(hotelId).subscribe({
+      next: (r: any) => {
+        const h = r.data.hotel;
+        this.hotelProfile.set(h);
+        this.hotelName = h.name || 'Hotel Restaurant';
+        localStorage.setItem('hotelProfile', JSON.stringify(h));
+      },
+    });
+  }
 
   loadAll() {
     this.loadCategories();
@@ -1395,6 +1578,7 @@ export class RestaurantComponent implements OnInit {
 
   billRoomNumber = '';
   hotelName      = 'Hotel Restaurant';
+  hotelProfile   = signal<any>({});
 
   openPayOrder(o: any) { this.payTarget.set(o); this.payMethod.set(o.paymentMethod||'cash'); this.billMode.set('full'); this.billRoomNumber = o.roomNumber||''; this.showPayOrder.set(true); }
 
@@ -1451,77 +1635,153 @@ export class RestaurantComponent implements OnInit {
   }
 
   // Print receipt
+  private buildReceiptHeader(hotel: any, order: any): string {
+    const iUrl = (p: string) => p ? (p.startsWith('http') ? p : 'http://localhost:5000' + p) : '';
+    let h = '';
+    if (hotel.logoUrl) {
+      h += `<div style="text-align:center;margin-bottom:6px"><img src="${iUrl(hotel.logoUrl)}" style="max-height:60px;max-width:160px;object-fit:contain"></div>`;
+    }
+    h += `<div style="text-align:center;margin-bottom:8px">
+      <strong style="font-size:15px">${hotel.name || 'Hotel Restaurant'}</strong><br>
+      ${hotel.contactPhone ? `<span style="font-size:10px;color:#555">${hotel.contactPhone}</span><br>` : ''}
+      ${hotel.contactEmail ? `<span style="font-size:10px;color:#555">${hotel.contactEmail}</span><br>` : ''}
+      ${hotel.address?.street ? `<span style="font-size:10px;color:#555">${hotel.address.street}, ${hotel.address.city||''}</span>` : ''}
+    </div>`;
+    return h;
+  }
+
+  private buildReceiptFooter(hotel: any, payMethod?: string): string {
+    const iUrl = (p: string) => p ? (p.startsWith('http') ? p : 'http://localhost:5000' + p) : '';
+    let f = `<div style="border-top:1px dashed #ccc;margin:6px 0"></div>`;
+    if (payMethod) f += `<div style="font-size:11px;margin-bottom:4px">Payment: ${payMethod}</div>`;
+    f += `<div style="text-align:center;font-size:10px;color:#666;margin:6px 0">${hotel.receiptFooter || 'Thank you for your visit!'}</div>`;
+
+    // Signature + Stamp side by side
+    const hasSig   = !!hotel.signatureUrl;
+    const hasStamp = !!hotel.stampUrl;
+    if (hasSig || hasStamp) {
+      f += `<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:10px;padding-top:6px;border-top:1px solid #eee">`;
+      if (hasSig) {
+        f += `<div><div style="font-size:9px;color:#aaa;margin-bottom:2px">Authorized Signature</div>
+          <img src="${iUrl(hotel.signatureUrl)}" style="max-height:36px;max-width:100px;object-fit:contain"></div>`;
+      } else { f += `<div></div>`; }
+      if (hasStamp) {
+        f += `<div style="text-align:right"><div style="font-size:9px;color:#aaa;margin-bottom:2px">Official Stamp</div>
+          <img src="${iUrl(hotel.stampUrl)}" style="max-height:50px;max-width:50px;object-fit:contain"></div>`;
+      }
+      f += `</div>`;
+    }
+    f += `<div style="text-align:center;font-size:10px;color:#aaa;margin-top:6px">${new Date().toLocaleString()}</div>`;
+    return f;
+  }
+
   printReceipt(order: any) {
     this.receiptOrder.set(order);
+    const hotel = this.hotelProfile();
     setTimeout(() => {
-      const el = document.getElementById('receipt-print-area');
-      if (!el) return;
-      const w = window.open('', '_blank', 'width=400,height=600');
-      if (!w) return;
-      w.document.write(`<html><head><title>Receipt</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Courier New',monospace;font-size:12px;}@media print{body{width:80mm;}}</style></head><body>${el.innerHTML}</body></html>`);
+      const w = window.open('', '_blank', 'width=420,height=700');
+      if (!w) { alert('Please allow popups to print receipts'); return; }
+
+      let html = `<html><head><title>Receipt - ${order.orderNumber}</title>
+      <style>
+        *{margin:0;padding:0;box-sizing:border-box;}
+        body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:80mm;}
+        @media print{body{width:80mm;padding:0;}button{display:none!important;}}
+        .item-row{display:flex;justify-content:space-between;margin-bottom:3px;}
+        .total-row{display:flex;justify-content:space-between;font-weight:bold;font-size:14px;}
+        .dashed{border-top:1px dashed #ccc;margin:6px 0;}
+        .print-btn{display:block;width:100%;margin:12px 0;padding:8px;background:#6d2a75;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;}
+      </style></head><body>`;
+
+      html += this.buildReceiptHeader(hotel, order);
+      html += `<div class="dashed"></div>
+      <div style="font-size:11px;margin-bottom:4px"><strong>Order:</strong> ${order.orderNumber}</div>
+      <div style="font-size:11px;margin-bottom:4px"><strong>Date:</strong> ${new Date(order.createdAt).toLocaleString()}</div>
+      ${order.tableNumber ? `<div style="font-size:11px;margin-bottom:4px"><strong>Table:</strong> ${order.tableNumber}</div>` : ''}
+      ${order.roomNumber  ? `<div style="font-size:11px;margin-bottom:4px"><strong>Room:</strong> ${order.roomNumber}</div>` : ''}
+      ${order.guestName   ? `<div style="font-size:11px;margin-bottom:4px"><strong>Guest:</strong> ${order.guestName}</div>` : ''}
+      <div class="dashed"></div>`;
+
+      for (const item of order.items) {
+        html += `<div class="item-row"><span>${item.qty}x ${item.name}</span><span>$${item.subtotal.toFixed(2)}</span></div>`;
+      }
+
+      html += `<div class="dashed"></div>
+      <div class="item-row"><span>Subtotal</span><span>$${(order.subtotal||0).toFixed(2)}</span></div>
+      <div class="item-row"><span>Tax (${order.taxRate||5}%)</span><span>$${(order.taxAmount||0).toFixed(2)}</span></div>
+      ${order.discountAmt > 0 ? `<div class="item-row"><span>Discount</span><span style="color:#c00">-$${order.discountAmt.toFixed(2)}</span></div>` : ''}
+      <div class="dashed"></div>
+      <div class="total-row"><span>TOTAL</span><span>$${(order.totalAmount||0).toFixed(2)}</span></div>`;
+
+      html += this.buildReceiptFooter(hotel, order.paymentMethod);
+      html += `<button class="print-btn" onclick="window.print()">🖨 Print</button></body></html>`;
+
+      w.document.write(html);
       w.document.close();
-      setTimeout(() => { w.print(); }, 300);
+      setTimeout(() => w.print(), 600);
     }, 100);
   }
 
   printSplitReceipt() {
-    const o = this.payTarget();
-    if (!o) return;
+    const o = this.payTarget(); if (!o) return;
+    const hotel = this.hotelProfile();
     const perPerson = this.splitAmount();
-    let html = `<html><head><title>Split Receipt</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Courier New',monospace;font-size:12px;}.receipt{width:80mm;padding:10px;page-break-after:always;}@media print{.receipt{width:80mm;}}</style></head><body>`;
+    const style = `*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Courier New',monospace;font-size:12px;}.receipt{width:80mm;padding:10px;page-break-after:always;}@media print{.receipt{width:80mm;}button{display:none!important;}}`;
+    let html = `<html><head><title>Split Receipt</title><style>${style}</style></head><body>`;
     for (let i = 0; i < this.splitCount(); i++) {
-      html += `<div class="receipt">
-        <div style="text-align:center;font-size:14px;font-weight:bold;margin-bottom:6px">${this.hotelName}</div>
-        <div style="text-align:center;font-size:11px;margin-bottom:6px">Split Receipt ${i+1} of ${this.splitCount()}</div>
-        <div style="border-bottom:1px dashed #000;margin:4px 0"></div>
-        <div style="font-size:11px">Order: ${o.orderNumber}</div>
-        <div style="font-size:11px">Table: ${o.tableNumber||'—'}</div>
-        <div style="border-bottom:1px dashed #000;margin:4px 0"></div>`;
+      html += `<div class="receipt">${this.buildReceiptHeader(hotel, o)}`;
+      html += `<div style="text-align:center;font-size:11px;background:#f3e8ff;padding:4px;border-radius:4px;margin-bottom:6px">Split Receipt ${i+1} of ${this.splitCount()}</div>`;
+      html += `<div style="border-top:1px dashed #ccc;margin:4px 0"></div>`;
+      html += `<div style="font-size:11px">Order: ${o.orderNumber}</div>`;
+      html += `<div style="font-size:11px">Table: ${o.tableNumber||'—'}</div>`;
+      html += `<div style="border-top:1px dashed #ccc;margin:4px 0"></div>`;
       for (const item of o.items) {
         html += `<div style="display:flex;justify-content:space-between;font-size:11px"><span>${item.qty}x ${item.name}</span><span>$${item.subtotal}</span></div>`;
       }
-      html += `<div style="border-bottom:1px dashed #000;margin:4px 0"></div>
-        <div style="display:flex;justify-content:space-between;font-size:11px"><span>Total bill</span><span>$${o.totalAmount}</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:bold;margin-top:4px"><span>YOUR SHARE</span><span>$${perPerson}</span></div>
-        <div style="text-align:center;font-size:10px;margin-top:8px;color:#666">Thank you!</div>
-      </div>`;
+      html += `<div style="border-top:1px dashed #ccc;margin:4px 0"></div>`;
+      html += `<div style="display:flex;justify-content:space-between;font-size:11px"><span>Total bill</span><span>$${o.totalAmount}</span></div>`;
+      html += `<div style="display:flex;justify-content:space-between;font-size:15px;font-weight:bold;margin-top:4px;border:1.5px solid #6d2a75;padding:5px;border-radius:4px"><span>YOUR SHARE</span><span>$${perPerson}</span></div>`;
+      html += this.buildReceiptFooter(hotel);
+      html += `</div>`;
     }
+    html += `<button onclick="window.print()" style="display:block;margin:12px auto;padding:8px 20px;background:#6d2a75;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨 Print All</button>`;
     html += '</body></html>';
     const w = window.open('', '_blank', 'width=500,height=700');
     if (!w) return;
     w.document.write(html); w.document.close();
-    setTimeout(() => w.print(), 400);
+    setTimeout(() => w.print(), 500);
   }
 
   printCustomSplitReceipts() {
-    const o = this.payTarget();
-    if (!o) return;
+    const o = this.payTarget(); if (!o) return;
+    const hotel = this.hotelProfile();
     const splits = this.customSplits();
-    let html = `<html><head><title>Custom Split Receipts</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Courier New',monospace;font-size:12px;}.receipt{width:80mm;padding:10px;page-break-after:always;}@media print{.receipt{width:80mm;}}</style></head><body>`;
+    const style = `*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Courier New',monospace;font-size:12px;}.receipt{width:80mm;padding:10px;page-break-after:always;}@media print{.receipt{width:80mm;}button{display:none!important;}}`;
+    let html = `<html><head><title>Split Receipts</title><style>${style}</style></head><body>`;
     for (const sp of splits) {
       const total = this.splitPersonTotal(sp);
       if (total === 0) continue;
-      html += `<div class="receipt">
-        <div style="text-align:center;font-size:14px;font-weight:bold;margin-bottom:4px">${this.hotelName}</div>
-        <div style="text-align:center;font-size:11px;margin-bottom:4px">${sp.name}'s Receipt</div>
-        <div style="border-bottom:1px dashed #000;margin:4px 0"></div>
-        <div style="font-size:11px">Order: ${o.orderNumber}</div>
-        <div style="border-bottom:1px dashed #000;margin:4px 0"></div>`;
+      html += `<div class="receipt">${this.buildReceiptHeader(hotel, o)}`;
+      html += `<div style="text-align:center;font-size:12px;font-weight:bold;background:#f3e8ff;padding:4px;border-radius:4px;margin-bottom:6px">${sp.name}'s Bill</div>`;
+      html += `<div style="border-top:1px dashed #ccc;margin:4px 0"></div>`;
+      html += `<div style="font-size:11px;margin-bottom:4px">Order: ${o.orderNumber}</div>`;
+      html += `<div style="border-top:1px dashed #ccc;margin:4px 0"></div>`;
       for (const item of o.items) {
         const qty = sp.items[item.name] || 0;
         if (!qty) continue;
         html += `<div style="display:flex;justify-content:space-between;font-size:11px"><span>${qty}x ${item.name}</span><span>$${(qty*item.unitPrice).toFixed(2)}</span></div>`;
       }
-      html += `<div style="border-bottom:2px solid #000;margin:4px 0"></div>
-        <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:bold"><span>TOTAL</span><span>$${total}</span></div>
-        <div style="text-align:center;font-size:10px;margin-top:8px;color:#666">Thank you for dining with us!</div>
-      </div>`;
+      html += `<div style="border-top:2px solid #333;margin:4px 0"></div>`;
+      html += `<div style="display:flex;justify-content:space-between;font-size:15px;font-weight:bold;border:1.5px solid #6d2a75;padding:5px;border-radius:4px"><span>TOTAL</span><span>$${total}</span></div>`;
+      html += this.buildReceiptFooter(hotel);
+      html += `</div>`;
     }
+    html += `<button onclick="window.print()" style="display:block;margin:12px auto;padding:8px 20px;background:#6d2a75;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨 Print All</button>`;
     html += '</body></html>';
     const w = window.open('', '_blank', 'width=500,height=700');
     if (!w) return;
     w.document.write(html); w.document.close();
-    setTimeout(() => w.print(), 400);
+    setTimeout(() => w.print(), 500);
   }
 
   confirmPayOrder() {
@@ -1712,6 +1972,67 @@ export class RestaurantComponent implements OnInit {
       error: (e: any) => { this.addItemsSaving.set(false); this.addItemsErr.set(e.error?.message||'Failed to add items'); },
     });
   }
+
+  // ── Order History ──
+  loadHistory() {
+    this.historyLoading.set(true);
+    const f: any = {};
+    if (this.historyStatus) f.status = this.historyStatus;
+    if (this.historyType)   f.type   = this.historyType;
+    if (this.historyFrom)   f.from   = this.historyFrom;
+    if (this.historyTo)     f.to     = this.historyTo;
+    this.orderSvc.getHistory(f).subscribe({
+      next: (r: any) => {
+        const orders = r.data.orders || [];
+        this.historyOrders.set(orders);
+        this.historyLoading.set(false);
+        this.calcHistoryStats(orders);
+      },
+      error: () => this.historyLoading.set(false),
+    });
+  }
+
+  calcHistoryStats(orders: any[]) {
+    this.historyStats.set({
+      total:     orders.length,
+      paid:      orders.filter((o: any) => o.status === 'paid').length,
+      pending:   orders.filter((o: any) => ['pending','preparing','served'].includes(o.status)).length,
+      cancelled: orders.filter((o: any) => o.status === 'cancelled').length,
+      revenue:   orders.filter((o: any) => o.status === 'paid').reduce((s: number, o: any) => s + o.totalAmount, 0),
+    });
+  }
+
+  readonly filteredHistoryOrders = computed(() => {
+    const q = this.historySearch.toLowerCase().trim();
+    if (!q) return this.historyOrders();
+    return this.historyOrders().filter((o: any) =>
+      o.orderNumber?.toLowerCase().includes(q) ||
+      o.guestName?.toLowerCase().includes(q) ||
+      o.tableNumber?.toLowerCase().includes(q) ||
+      o.roomNumber?.toLowerCase().includes(q) ||
+      o.staffId?.name?.toLowerCase().includes(q)
+    );
+  });
+
+  applyHistoryFilter() { /* computed */ }
+
+  setHistoryPreset(preset: string) {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    if (preset === 'today') { this.historyFrom = today; this.historyTo = today; }
+    else if (preset === 'week')  { const d = new Date(now); d.setDate(d.getDate()-7);  this.historyFrom = d.toISOString().split('T')[0]; this.historyTo = today; }
+    else if (preset === 'month') { const d = new Date(now); d.setDate(d.getDate()-30); this.historyFrom = d.toISOString().split('T')[0]; this.historyTo = today; }
+    this.loadHistory();
+  }
+
+  clearHistoryFilters() {
+    this.historySearch=''; this.historyStatus=''; this.historyType=''; this.historyFrom=''; this.historyTo='';
+    this.loadHistory();
+  }
+
+  historyStatusBadge(s: string): string { const m: Record<string,string>={paid:'b-green',pending:'b-yellow',preparing:'b-purple',served:'b-blue',cancelled:'b-red'}; return m[s]||'b-gray'; }
+  historyStatusIcon(s: string): string  { const m: Record<string,string>={paid:'✅',pending:'⏳',preparing:'👨‍🍳',served:'🍽',cancelled:'❌'}; return m[s]||''; }
+  payMethodIcon(m: string): string      { const icons: Record<string,string>={cash:'💵',card:'💳',room_charge:'🛏',mobile_pay:'📱'}; return icons[m]||'💳'; }
 
   // ── STORE ──
   loadMovements(type?: string) {

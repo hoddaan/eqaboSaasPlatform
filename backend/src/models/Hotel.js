@@ -21,7 +21,18 @@ const hotelSchema = new mongoose.Schema({
   timezone: { type: String, required: true, default: 'UTC' },
   currency: { type: String, required: true, default: 'USD', uppercase: true },
   isActive: { type: Boolean, default: true },
-  logoUrl:  { type: String },
+  logoUrl:       { type: String },      // main logo
+  coverImageUrl: { type: String },      // cover/banner photo
+  signatureUrl:  { type: String },      // receipt signature image
+  stampUrl:      { type: String },      // official stamp image
+  receiptFooter: { type: String },      // custom text on receipts
+  website:       { type: String },
+  description:   { type: String },
+  socialMedia: {
+    facebook:  { type: String },
+    instagram: { type: String },
+    twitter:   { type: String },
+  },
   propertyType: {
     type: String,
     enum: ['hotel', 'resort', 'villa', 'hostel'],

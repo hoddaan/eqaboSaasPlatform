@@ -75,20 +75,40 @@ exports.getFinanceReport = async (req, res) => {
 
 // ── Transactions CRUD ──────────────────────────────────
 exports.getTransactions = async (req, res) => {
-  const { type, page = 1, limit = 50 } = req.query;
+  const { type, method, from, to, search, page = 1, limit = 100 } = req.query;
   const filter = { hotelId: req.hotelId };
-  if (type) filter.type = type;
-  const skip = (page - 1) * limit;
+  if (type)   filter.type = type;
+  if (method) filter.paymentMethod = method;
+  if (from || to) {
+    filter.createdAt = {};
+    if (from) filter.createdAt.$gte = new Date(from);
+    if (to)   { const d = new Date(to); d.setHours(23,59,59,999); filter.createdAt.$lte = d; }
+  }
+  if (search) {
+    filter.$or = [
+      { reference: { $regex: search, $options: 'i' } },
+      { notes:     { $regex: search, $options: 'i' } },
+    ];
+  }
+  const skip = (Number(page) - 1) * Number(limit);
   const [transactions, total] = await Promise.all([
     Transaction.find(filter)
-      .populate('guestId', 'firstName lastName')
-      .populate('processedByUserId', 'name')
+      .populate('guestId',           'firstName lastName')
+      .populate('bookingId',          'bookingRef')
+      .populate('orderId',            'orderNumber')
+      .populate('invoiceId',          'invoiceNumber')
+      .populate('processedByUserId',  'name')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(Number(limit)),
     Transaction.countDocuments(filter),
   ]);
-  res.json({ success: true, data: { transactions, total } });
+
+  const allForStats = await Transaction.find({ hotelId: req.hotelId, ...( (from||to) ? { createdAt: filter.createdAt } : {}) });
+  const totalIn  = allForStats.filter(t=>t.amount>0).reduce((s,t)=>s+t.amount,0);
+  const totalOut = allForStats.filter(t=>t.amount<0).reduce((s,t)=>s+Math.abs(t.amount),0);
+
+  res.json({ success: true, data: { transactions, total, totalIn, totalOut } });
 };
 
 exports.createTransaction = async (req, res) => {

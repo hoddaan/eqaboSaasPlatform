@@ -2,7 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const ctrl    = require('../controllers/orders/orders.controller');
 const { protect, authorize, tenantScope } = require('../middleware/auth');
-const staff = [protect, authorize('SuperAdmin','CompanyAdmin','HotelAdmin','Manager','Receptionist','RestaurantStaff','Finance'), tenantScope];
+const staff = [protect, authorize('SuperAdmin','CompanyAdmin','HotelAdmin','Manager','Receptionist','RestaurantStaff','Technician','Finance'), tenantScope];
 
 // Dashboard (must be before /:id)
 router.get('/dashboard',              ...staff, ctrl.getDashboard);

@@ -46,7 +46,8 @@ exports.login = async (req, res) => {
     return res.status(400).json({ success: false, message: 'Email and password are required' });
   }
 
-  const user = await User.findOne({ email }).select('+passwordHash +refreshToken');
+  const user = await User.findOne({ email }).select('+passwordHash +refreshToken')
+    .populate('hotelId', 'name slug currency timezone services logoUrl signatureUrl stampUrl');
 
   if (!user || !(await user.comparePassword(password))) {
     return res.status(401).json({ success: false, message: 'Invalid email or password' });
@@ -103,7 +104,7 @@ exports.refreshToken = async (req, res) => {
 // ── Get current user ───────────────────────────────────
 exports.getMe = async (req, res) => {
   const Hotel = require('../../models/Hotel');
-  const user = await User.findById(req.user._id).populate('hotelId', 'name slug currency timezone services');
+  const user = await User.findById(req.user._id).populate('hotelId', 'name slug currency timezone services logoUrl signatureUrl stampUrl');
   
   // Include hotel services in response so frontend can scope the nav
   const hotelServices = user.hotelId?.services || ['hotel','restaurant','coffee'];

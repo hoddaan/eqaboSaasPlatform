@@ -28,6 +28,7 @@ const countryRoutes     = require('./routes/countries.routes');
 const cityRoutes        = require('./routes/cities.routes');
 const companyRoutes     = require('./routes/companies.routes');
 const hotelRoutes       = require('./routes/hotels.routes');
+const hallRoutes        = require('./routes/halls.routes');
 const userRoutes        = require('./routes/users.routes');
 const roomRoutes        = require('./routes/rooms.routes');
 const bookingRoutes     = require('./routes/bookings.routes');
@@ -46,7 +47,20 @@ const app = express();
 connectDB();
 
 app.use(helmet());
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:4200', credentials: true }));
+app.use(cors({
+  origin: [process.env.CLIENT_URL || 'http://localhost:4200', 'http://localhost:4200'],
+  credentials: true,
+  exposedHeaders: ['Content-Type'],
+}));
+// Allow images to be loaded cross-origin
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+});
+// Serve hotel uploads
+app.use('/uploads/hotel', require('express').static(require('path').join(__dirname, '../uploads/hotel')));
+app.use('/uploads/halls', require('express').static(require('path').join(__dirname, '../uploads/halls')));
 app.use(morgan(process.env.NODE_ENV === 'development' ? 'dev' : 'combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -61,6 +75,7 @@ app.use(`${API}/countries`,    countryRoutes);
 app.use(`${API}/cities`,       cityRoutes);
 app.use(`${API}/companies`,    companyRoutes);
 app.use(`${API}/hotels`,       hotelRoutes);
+app.use(`${API}/halls`,         hallRoutes);
 app.use(`${API}/users`,        userRoutes);
 app.use(`${API}/rooms`,        roomRoutes);
 app.use(`${API}/bookings`,     bookingRoutes);
@@ -76,7 +91,7 @@ app.use(`${API}/staff`,         staffRoutes);
 app.use(`${API}/dashboard`,    dashboardRoutes);
 
 app.get('/health', (_req, res) => res.json({ success: true, message: 'Eqabo API running', env: process.env.NODE_ENV }));
-app.use('/uploads', express.static('uploads'));
+app.use('/uploads', express.static(require('path').join(__dirname, '../uploads')));
 app.use(notFound);
 app.use(errorHandler);
 

@@ -3,7 +3,7 @@ const router  = express.Router();
 const ctrl    = require('../controllers/rooms/rooms.controller');
 const { protect, authorize, tenantScope } = require('../middleware/auth');
 // Include CompanyAdmin so they can create/manage rooms across their hotels
-const staff = [protect, authorize('SuperAdmin','CompanyAdmin','HotelAdmin','Manager','Receptionist'), tenantScope];
+const staff = [protect, authorize('SuperAdmin','CompanyAdmin','HotelAdmin','Manager','Receptionist','RestaurantStaff','Technician','Finance'), tenantScope];
 
 router.get   ('/stats',  ...staff, ctrl.getRoomStats);
 router.get   ('/',       ...staff, ctrl.getRooms);

@@ -19,7 +19,10 @@ interface NavItem { label: string; icon: string; route: string; badge?: number; 
 
     <div class="sb-ctx">
       <div class="sb-ctx-row">
-        <div class="sb-dot"></div>
+        <div *ngIf="hotelLogo()" style="width:36px;height:36px;border-radius:8px;overflow:hidden;border:1.5px solid rgba(255,255,255,.2);flex-shrink:0;background:#fff;display:flex;align-items:center;justify-content:center">
+          <img [src]="hotelLogo()" alt="logo" style="width:100%;height:100%;object-fit:contain;padding:2px">
+        </div>
+        <div *ngIf="!hotelLogo()" class="sb-dot"></div>
         <div>
           <div class="sb-ctx-name">{{ contextName() }}</div>
           <div class="sb-ctx-meta">{{ contextMeta() }}</div>
@@ -63,7 +66,9 @@ interface NavItem { label: string; icon: string; route: string; badge?: number; 
   <div class="main">
     <div class="topbar">
       <div class="tb-breadcrumb">
-        <span style="font-size:13px">🏨</span>
+        <img *ngIf="hotelLogo()" [src]="hotelLogo()" alt="Hotel Logo"
+          style="height:28px;width:28px;border-radius:6px;object-fit:contain;border:1px solid var(--border);background:#fff;padding:1px">
+        <span *ngIf="!hotelLogo()" style="font-size:13px">🏨</span>
         <span class="tb-sep">›</span>
         <span style="font-weight:600;color:var(--text)">{{ contextName() }}</span>
       </div>
@@ -86,6 +91,15 @@ interface NavItem { label: string; icon: string; route: string; badge?: number; 
 })
 export class ShellComponent implements OnInit {
   readonly user = this.auth.user;
+
+  readonly hotelLogo = computed(() => {
+    const u = this.user();
+    if (!u) return '';
+    const h = u.hotelId as any;
+    const logo = h?.logoUrl || '';
+    if (!logo) return '';
+    return logo.startsWith('http') ? logo : 'http://localhost:5000' + logo;
+  });
 
   readonly contextName = computed(() => {
     const u = this.user();
@@ -139,11 +153,12 @@ export class ShellComponent implements OnInit {
     },
     {
       label: 'Hotel',
+      roles: ['SuperAdmin','CompanyAdmin','HotelAdmin','Manager','Receptionist','Technician','Finance'],
       items: [
-        { label: 'Rooms',    icon: '🛏', route: '/rooms',    service: 'hotel' },
-        { label: 'Bookings', icon: '📅', route: '/bookings', service: 'hotel', badge: 3 },
-        { label: 'Guests',   icon: '👤', route: '/guests',   service: 'hotel' },
-        { label: 'Calendar', icon: '🗓', route: '/calendar', service: 'hotel' },
+        { label: 'Rooms',    icon: '🛏', route: '/rooms',    service: 'hotel', roles: ['SuperAdmin','CompanyAdmin','HotelAdmin','Manager','Receptionist','Finance'] },
+        { label: 'Bookings', icon: '📅', route: '/bookings', service: 'hotel', badge: 3, roles: ['SuperAdmin','CompanyAdmin','HotelAdmin','Manager','Receptionist','Finance'] },
+        { label: 'Guests',   icon: '👤', route: '/guests',   service: 'hotel', roles: ['SuperAdmin','CompanyAdmin','HotelAdmin','Manager','Receptionist','Finance'] },
+        { label: 'Calendar', icon: '🗓', route: '/calendar', service: 'hotel', roles: ['SuperAdmin','CompanyAdmin','HotelAdmin','Manager','Receptionist','Finance'] },
       ],
     },
     {
@@ -151,14 +166,15 @@ export class ShellComponent implements OnInit {
       items: [
         { label: 'Restaurant', icon: '🍽', route: '/restaurant', service: 'restaurant',
           roles: ['SuperAdmin','CompanyAdmin','HotelAdmin','Manager','RestaurantStaff'] },
-        { label: 'Partners', icon: '🏢', route: '/partners', roles: ['SuperAdmin','CompanyAdmin','HotelAdmin','Manager'] },
-        { label: 'Maintenance',    icon: '🔧', route: '/maintenance', service: 'hotel', badge: 2 },
-        { label: 'Staff',          icon: '👥', route: '/staff',
-          roles: ['SuperAdmin','CompanyAdmin','HotelAdmin','Manager'] },
+        { label: 'Partners',   icon: '🏢', route: '/partners',    roles: ['SuperAdmin','CompanyAdmin','HotelAdmin','Manager'] },
+        { label: 'Halls & Events', icon: '🏛', route: '/halls',   service: 'hotel', roles: ['SuperAdmin','CompanyAdmin','HotelAdmin','Manager','Receptionist','RestaurantStaff','Finance'] },
+        { label: 'Maintenance',    icon: '🔧', route: '/maintenance', service: 'hotel', badge: 2, roles: ['SuperAdmin','CompanyAdmin','HotelAdmin','Manager','Receptionist','RestaurantStaff','Technician','Finance'] },
+        { label: 'Staff',          icon: '👥', route: '/staff', roles: ['SuperAdmin','CompanyAdmin','HotelAdmin','Manager'] },
       ],
     },
     {
       label: 'Finance',
+      roles: ['SuperAdmin','CompanyAdmin','HotelAdmin','Manager','Finance'],
       items: [
         { label: 'Finance',      icon: '💰', route: '/finance',
           roles: ['SuperAdmin','CompanyAdmin','HotelAdmin','Manager','Finance'] },
@@ -190,7 +206,7 @@ export class ShellComponent implements OnInit {
     // Service check — only applies to non-admin roles
     if (item.service) {
       const role = this.auth.user()?.role;
-      const adminRoles = ['SuperAdmin','CompanyAdmin','HotelAdmin','Manager'];
+      const adminRoles = ['SuperAdmin','CompanyAdmin','HotelAdmin','Manager','Receptionist','RestaurantStaff','Technician','Finance'];
       if (!adminRoles.includes(role || '')) {
         return this.auth.hasService(item.service);
       }

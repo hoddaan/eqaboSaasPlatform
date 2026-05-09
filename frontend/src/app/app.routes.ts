@@ -32,6 +32,7 @@ export const routes: Routes = [
       { path: 'restaurant', loadComponent: () => import('./features/restaurant/restaurant.component').then(m => m.RestaurantComponent) },
   { path: 'partners', loadComponent: () => import('./features/partners/partners.component').then(m => m.PartnersComponent) },
   { path: 'maintenance',   loadComponent: () => import('./features/maintenance/maintenance.component').then(m => m.MaintenanceComponent) },
+  { path: 'halls',         loadComponent: () => import('./features/halls/halls.component').then(m => m.HallsComponent) },
       { path: 'staff',         canActivate: [roleGuard(['SuperAdmin','CompanyAdmin','HotelAdmin','Manager'])], loadComponent: () => import('./features/staff/staff.component').then(m => m.StaffComponent) },
 
       // ── Finance ──

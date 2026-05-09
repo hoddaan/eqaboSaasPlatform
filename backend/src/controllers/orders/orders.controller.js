@@ -2,24 +2,47 @@ const { RestaurantOrder, MenuItem, Table, StoreItem } = require('../../models/in
 
 // ── ORDERS ─────────────────────────────────────────────
 exports.getOrders = async (req, res) => {
-  const { status, type, date, tableNumber } = req.query;
+  const { status, type, date, from, to, tableNumber, search, limit = 200, history } = req.query;
   const filter = { hotelId: req.hotelId };
-  if (status)      filter.status = status;
+
+  if (status)      filter.status = Array.isArray(status) ? { $in: status } : status;
   if (type)        filter.type   = type;
   if (tableNumber) filter.tableNumber = tableNumber;
-  if (date) {
+
+  if (search) {
+    filter.$or = [
+      { orderNumber: { $regex: search, $options: 'i' } },
+      { guestName:   { $regex: search, $options: 'i' } },
+      { tableNumber: { $regex: search, $options: 'i' } },
+      { roomNumber:  { $regex: search, $options: 'i' } },
+    ];
+  }
+
+  // Date filtering
+  if (from || to) {
+    filter.createdAt = {};
+    if (from) { const d = new Date(from); d.setHours(0,0,0,0); filter.createdAt.$gte = d; }
+    if (to)   { const d = new Date(to);   d.setHours(23,59,59,999); filter.createdAt.$lte = d; }
+  } else if (date) {
     const d = new Date(date); d.setHours(0,0,0,0);
     filter.createdAt = { $gte: d, $lt: new Date(d.getTime() + 86400000) };
-  } else {
-    // Default: today
+  } else if (!history) {
+    // Default active view: today only
     const d = new Date(); d.setHours(0,0,0,0);
     filter.createdAt = { $gte: d };
   }
+  // history=true means no date filter — return everything
+
   const orders = await RestaurantOrder.find(filter)
     .populate('staffId', 'name')
     .populate('roomId', 'roomNumber')
-    .sort({ createdAt: -1 }).limit(200);
-  res.json({ success: true, data: { orders } });
+    .sort({ createdAt: -1 })
+    .limit(Number(limit) || 500);
+
+  const totalRevenue = orders.filter(o => o.status === 'paid').reduce((s, o) => s + o.totalAmount, 0);
+  const totalOrders  = orders.length;
+
+  res.json({ success: true, data: { orders, totalRevenue, totalOrders } });
 };
 
 exports.getOrder = async (req, res) => {
@@ -81,6 +104,21 @@ exports.updateOrderStatus = async (req, res) => {
   if (['paid','cancelled'].includes(status) && order.tableId) {
     await Table.findByIdAndUpdate(order.tableId, { status: 'available', currentOrderId: null });
   }
+  // Auto-create transaction when order is paid
+  if (req.body.status === 'paid' && order) {
+    await Transaction.create({
+      hotelId:           req.hotelId,
+      orderId:           order._id,
+      type:              'payment',
+      amount:            order.totalAmount,
+      currency:          'USD',
+      paymentMethod:     req.body.paymentMethod || 'cash',
+      reference:         order.orderNumber,
+      notes:             `Restaurant: ${order.type} - ${order.orderNumber}`,
+      processedByUserId: req.user._id,
+    }).catch(() => {});
+  }
+
   res.json({ success: true, message: 'Order updated', data: { order } });
 };
 

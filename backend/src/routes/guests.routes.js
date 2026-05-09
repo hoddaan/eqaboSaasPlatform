@@ -2,7 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const ctrl    = require('../controllers/guests/guests.controller');
 const { protect, authorize, tenantScope } = require('../middleware/auth');
-const staff = [protect, authorize('SuperAdmin','CompanyAdmin','HotelAdmin','Manager','Receptionist'), tenantScope];
+const staff = [protect, authorize('SuperAdmin','CompanyAdmin','HotelAdmin','Manager','Receptionist','RestaurantStaff','Technician','Finance'), tenantScope];
 
 router.get   ('/',                  ...staff, ctrl.getGuests);
 router.post  ('/',                  ...staff, ctrl.createGuest);

@@ -245,5 +245,21 @@ exports.checkoutGuest = async (req, res) => {
     settledAt:      new Date(),
   };
 
+  // Auto-create transaction record
+  if (totalDue > 0) {
+    await Transaction.create({
+      hotelId:           guest.hotelId,
+      bookingId:         booking?._id,
+      guestId:           guest._id,
+      type:              'payment',
+      amount:            totalDue,
+      currency:          'USD',
+      paymentMethod:     paymentMethod || 'cash',
+      reference:         booking?.bookingRef,
+      notes:             `Checkout: Room ${room?.roomNumber || ''}`,
+      processedByUserId: req.user._id,
+    }).catch(() => {});  // non-blocking
+  }
+
   res.json({ success: true, message: 'Guest checked out', data: { receipt } });
 };

@@ -179,8 +179,17 @@ const maintenanceSchema = new mongoose.Schema({
   },
   images: [{ type: String }],
   estimatedMinutes: { type: Number },
+  scheduledDate:    { type: Date },
+  startedAt:        { type: Date },
   completedAt:      { type: Date },
   resolutionNotes:  { type: String },
+  costEstimate:     { type: Number, default: 0 },
+  actualCost:       { type: Number, default: 0 },
+  partsUsed:        [{ name: String, quantity: Number, cost: Number }],
+  issueImages:      [{ type: String }],      // uploaded on create
+  proofImages:      [{ type: String }],      // uploaded on complete
+  affectsRoom:      { type: Boolean, default: false },
+  roomStatusSet:    { type: String },   // what status we put the room in
 }, { timestamps: true });
 
 maintenanceSchema.index({ hotelId: 1, status: 1 });
@@ -246,6 +255,42 @@ const payrollSchema = new mongoose.Schema({
 }, { timestamps: true });
 payrollSchema.index({ hotelId: 1, period: 1 });
 payrollSchema.index({ userId: 1, period: 1 }, { unique: true });
+
+
+// ── Asset ─────────────────────────────────────────────
+const assetSchema = new mongoose.Schema({
+  hotelId:      { type: mongoose.Schema.Types.ObjectId, ref: 'Hotel', required: true },
+  name:         { type: String, required: true },
+  category:     { type: String, enum: ['cash','bank','receivable','inventory','equipment','property','vehicle','other'], default: 'equipment' },
+  value:        { type: Number, required: true, default: 0 },
+  purchaseDate: { type: Date },
+  description:  { type: String },
+  isActive:     { type: Boolean, default: true },
+}, { timestamps: true });
+
+// ── Liability ─────────────────────────────────────────
+const liabilitySchema = new mongoose.Schema({
+  hotelId:    { type: mongoose.Schema.Types.ObjectId, ref: 'Hotel', required: true },
+  name:       { type: String, required: true },
+  category:   { type: String, enum: ['loan','payable','tax','salary','rent','utility','other'], default: 'other' },
+  amount:     { type: Number, required: true, default: 0 },
+  dueDate:    { type: Date },
+  isPaid:     { type: Boolean, default: false },
+  paidAt:     { type: Date },
+  description:{ type: String },
+}, { timestamps: true });
+
+// ── Expense ───────────────────────────────────────────
+const expenseSchema = new mongoose.Schema({
+  hotelId:    { type: mongoose.Schema.Types.ObjectId, ref: 'Hotel', required: true },
+  title:      { type: String, required: true },
+  category:   { type: String, enum: ['salary','rent','utilities','supplies','maintenance','marketing','food_beverage','equipment','other'], default: 'other' },
+  amount:     { type: Number, required: true },
+  date:       { type: Date, required: true, default: Date.now },
+  notes:      { type: String },
+  source:     { type: String, enum: ['hotel','restaurant','coffee','general'], default: 'general' },
+  recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+}, { timestamps: true });
 
 
 // ── Exports ────────────────────────────────────────────
@@ -325,4 +370,7 @@ module.exports = {
   Leave:              mongoose.model('Leave', leaveSchema),
   Attendance:         mongoose.model('Attendance', attendanceSchema),
   Payroll:            mongoose.model('Payroll', payrollSchema),
+  Asset:              mongoose.model('Asset', assetSchema),
+  Liability:          mongoose.model('Liability', liabilitySchema),
+  Expense:            mongoose.model('Expense', expenseSchema),
 };
